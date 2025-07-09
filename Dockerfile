@@ -1,28 +1,28 @@
-# -------- Stage 1: Build the Kotlin project using Maven --------
+# ---------- Stage 1: Build the Kotlin project using Maven ----------
 FROM maven:3.8.7-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
-# Copy POM and download dependencies first (for caching)
+# Copy project files
 COPY pom.xml .
 RUN mvn dependency:go-offline
 
-# Copy source files
 COPY src ./src
 
-# Package the JAR
-RUN mvn clean package -DskipTests
+# Compile and run tests
+RUN mvn clean test
 
 
-# -------- Stage 2: Runtime environment with headless Chrome --------
+# ---------- Stage 2: Runtime (Optional, if you want to run jar) ----------
+# Only needed if you want to run compiled JAR; omit if just testing.
 FROM eclipse-temurin:17-jdk
 
-# Install dependencies for Chrome
+# Install Chrome dependencies
 RUN apt-get update && apt-get install -y \
     wget \
-    unzip \
     gnupg \
     curl \
+    unzip \
     fonts-liberation \
     libatk-bridge2.0-0 \
     libgtk-3-0 \
@@ -33,16 +33,18 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome
+# Install Google Chrome
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
     apt install -y ./google-chrome-stable_current_amd64.deb && \
     rm google-chrome-stable_current_amd64.deb
 
-# Set working directory
 WORKDIR /app
 
-# Copy the jar from the builder
-COPY --from=builder /app/target/kotlin-selenium-testng-demo-1.0-SNAPSHOT.jar app.jar
+# Copy built files if needed (skip if test-only)
+# COPY --from=builder /app/target/kotlin-selenium-testng-demo-1.0-SNAPSHOT.jar app.jar
+# ENTRYPOINT ["java", "-jar", "app.jar"]
 
-# Set entrypoint
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# If just running tests, use Maven
+COPY --from=builder /app .
+
+CMD ["mvn", "test"]
